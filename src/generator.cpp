@@ -30,6 +30,7 @@ Board generate(int w, int h)
     const int pathLength = w * h;
     Board b(w, h);
     
+    std::cout << "Creating initial path..." << std::flush;
     Minisat::Solver s;
     std::map<std::pair<int, int>, Minisat::Lit> field_pathpos2lit;
     std::map<Wall, Minisat::Lit> wall2lit;
@@ -95,31 +96,32 @@ Board generate(int w, int h)
         }
     }
     s.addClause(pathClause);
+    std::cout << " done" << std::endl;
     
-    // iteratively remove walls as long as solution is unique
+    std::cout << "removing walls... " << std::flush;
     std::set<Wall> openWalls;
     for (auto w: b.getOpenWalls())
     {
-      openWalls.insert(w);
+        openWalls.insert(w);
     }
     
     std::vector<Wall> candidateWalls = path.getNonblockingWalls(b.getPossibleWalls());
     for (auto w: candidateWalls)
     {
-      openWalls.erase(w);
+        openWalls.erase(w);
     }
     std::vector<Wall> essentialWalls;
     while (!candidateWalls.empty())
     {
+        std::cout << "\rRemoving walls... " << candidateWalls.size() << "        " << std::flush;
         Minisat::vec<Minisat::Lit> assumptions;
         
         std::uniform_int_distribution<std::mt19937::result_type> wallDist(0, candidateWalls.size() - 1);
         int wallIndex = wallDist(rng);
-        std::cout << "trying to remove wall #" << wallIndex << "/" << candidateWalls.size() << std::endl;
         const Wall wall = candidateWalls[wallIndex];
         if (static_cast<unsigned int>(wallIndex + 1) != candidateWalls.size())
         {
-          std::swap(candidateWalls[wallIndex], candidateWalls.back());
+            std::swap(candidateWalls[wallIndex], candidateWalls.back());
         }
         candidateWalls.pop_back();
         
@@ -134,20 +136,20 @@ Board generate(int w, int h)
         }
         for (auto w: openWalls)
         {
-          assumptions.push(~wall2lit[w]);
+            assumptions.push(~wall2lit[w]);
         }
         
-        bool satisfiable = s.solve(assumptions);
-        if (satisfiable)
+        if (s.solve(assumptions))
         {
-          std::cout << "found essential wall" << std::endl;
-          essentialWalls.push_back(wall);
+            // wall is needed to keep path unique
+            essentialWalls.push_back(wall);
         }
         else
         {
-          openWalls.insert(wall);
+            openWalls.insert(wall);
         }
     }
+    std::cout << "\rRemoving walls... done        " << std::endl;
     
     // add non-blocking walls
     for (auto wall: essentialWalls)

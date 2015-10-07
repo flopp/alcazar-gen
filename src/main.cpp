@@ -81,8 +81,9 @@ int main(int argc, char** argv)
     }
     
     const Board b = generate(width, height);
-    std::cout << b;
+    std::cout << b << std::endl;
     
+    std::cout << "Recomputing solution..." << std::endl;
     std::tuple<bool, bool, Path> solution = b.solve();
     if (std::get<0>(solution))
     {
