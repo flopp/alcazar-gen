@@ -1,0 +1,5 @@
+MiniSat
+
+- source: https://github.com/niklasso/minisat
+- license: MIT License, see LICENSE
+- patched to work with C++11
