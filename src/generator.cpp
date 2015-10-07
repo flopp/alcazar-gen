@@ -99,17 +99,24 @@ Board generate(int w, int h)
     std::cout << " done" << std::endl;
     
     std::cout << "removing walls... " << std::flush;
+        
+    std::vector<Wall> candidateWalls = path.getNonblockingWalls(b.getPossibleWalls());
+        
+    // fixed variables of open walls
     std::set<Wall> openWalls;
     for (auto w: b.getOpenWalls())
     {
         openWalls.insert(w);
     }
-    
-    std::vector<Wall> candidateWalls = path.getNonblockingWalls(b.getPossibleWalls());
     for (auto w: candidateWalls)
     {
         openWalls.erase(w);
     }
+    for (auto w: openWalls)
+    {
+        s.addClause(~wall2lit[w]);
+    }
+    
     std::vector<Wall> essentialWalls;
     while (!candidateWalls.empty())
     {
@@ -117,7 +124,7 @@ Board generate(int w, int h)
         Minisat::vec<Minisat::Lit> assumptions;
         
         std::uniform_int_distribution<std::mt19937::result_type> wallDist(0, candidateWalls.size() - 1);
-        int wallIndex = wallDist(rng);
+        const int wallIndex = wallDist(rng);
         const Wall wall = candidateWalls[wallIndex];
         if (static_cast<unsigned int>(wallIndex + 1) != candidateWalls.size())
         {
@@ -125,28 +132,23 @@ Board generate(int w, int h)
         }
         candidateWalls.pop_back();
         
-        assumptions.push(~wall2lit[wall]);
+        const auto lit = wall2lit[wall];
+        assumptions.push(~lit);
         for (auto w: candidateWalls)
         {
             assumptions.push(wall2lit[w]);
         }
-        for (auto w: essentialWalls)
-        {
-            assumptions.push(wall2lit[w]);
-        }
-        for (auto w: openWalls)
-        {
-            assumptions.push(~wall2lit[w]);
-        }
         
         if (s.solve(assumptions))
         {
-            // wall is needed to keep path unique
+            // wall is needed to keep path unique -> fix variable=1
+            s.addClause(lit);
             essentialWalls.push_back(wall);
         }
         else
         {
-            openWalls.insert(wall);
+            // wall can be removed -> fix variable=0
+            s.addClause(~lit);
         }
     }
     std::cout << "\rRemoving walls... done        " << std::endl;
