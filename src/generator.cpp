@@ -49,7 +49,8 @@ Board generate(int w, int h)
     }
     
     std::mt19937 rng;
-    rng.seed(std::random_device()());
+    //rng.seed(std::random_device()());
+    rng.seed(42);
     
     std::uniform_int_distribution<std::mt19937::result_type> edgeFieldDist(0, edgeFields.size() - 1);
     
@@ -126,11 +127,18 @@ Board generate(int w, int h)
         std::uniform_int_distribution<std::mt19937::result_type> wallDist(0, candidateWalls.size() - 1);
         const int wallIndex = wallDist(rng);
         const Wall wall = candidateWalls[wallIndex];
-        if (static_cast<unsigned int>(wallIndex + 1) != candidateWalls.size())
+        if (candidateWalls.size() == 1)
         {
-            std::swap(candidateWalls[wallIndex], candidateWalls.back());
+            candidateWalls.clear();
         }
-        candidateWalls.pop_back();
+        else
+        {
+            if (static_cast<unsigned int>(wallIndex + 1) != candidateWalls.size())
+            {
+                std::swap(candidateWalls[wallIndex], candidateWalls.back());
+            }
+            candidateWalls.pop_back();
+        }
         
         const auto lit = wall2lit[wall];
         assumptions.push(~lit);
@@ -147,6 +155,25 @@ Board generate(int w, int h)
         }
         else
         {
+            // determining new candidates from final conflict clause
+            std::vector<Wall> newCandidateWalls;
+            for (int i = 0; i != s.conflict.toVec().size(); ++i)
+            {
+                auto clit = s.conflict.toVec()[i];
+                if (Minisat::sign(clit))
+                {
+                    for (auto w : candidateWalls)
+                    {
+                        if (wall2lit[w] == ~clit)
+                        {
+                            newCandidateWalls.push_back(w);
+                            break;
+                        }
+                    }
+                }
+            }
+            candidateWalls = newCandidateWalls;
+
             // wall can be removed -> fix variable=0
             s.addClause(~lit);
         }
