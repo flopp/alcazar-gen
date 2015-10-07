@@ -22,48 +22,16 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#include <iostream>
-#include "board.h"
-#include "commandline.h"
-#include "generator.h"
+#ifndef COMMANDLINE_H
+#define COMMANDLINE_H
 
-
-int main(int argc, char** argv)
+struct Options
 {
-    Options options;
-    if (!parseCommandLine(argc, argv, options))
-    {
-        return 1;
-    }
-    
-    const Board b = generate(options.width, options.height);
-    std::cout << b << std::endl;
-    
-    if (options.solve)
-    {
-        std::cout << "Computing solution..." << std::endl;
-        std::tuple<bool, bool, Path> solution = b.solve();
-        if (std::get<0>(solution))
-        {
-            std::cout << "Board is solvable" << std::endl;
-            
-            if (std::get<1>(solution))
-            {
-                std::cout << "Board is uniquely solvable" << std::endl;
-            }
-            else
-            {
-                std::cout << "Board is NOT uniquely solvable" << std::endl;
-            }
-            
-            std::cout << "Solution:" << std::endl;
-            b.print(std::cout, std::get<2>(solution));
-        }
-        else
-        {
-            std::cout << "Board is NOT solvable" << std::endl;
-        }
-    }
-        
-    return 0;
-}
+    int width = 0;
+    int height = 0;
+    bool solve = false;
+};
+
+bool parseCommandLine(int argc, char** argv, Options& options);
+
+#endif
