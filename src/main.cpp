@@ -36,7 +36,7 @@ int main(int argc, char** argv)
         return 1;
     }
     
-    const Board b = generate(options.width, options.height);
+    const Board b = generate(options.width, options.height, options.seed);
     std::cout << b << std::endl;
     
     if (options.solve)

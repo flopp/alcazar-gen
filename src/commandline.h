@@ -30,6 +30,7 @@ struct Options
     int width = 0;
     int height = 0;
     bool solve = false;
+    unsigned int seed = 0;
 };
 
 bool parseCommandLine(int argc, char** argv, Options& options);

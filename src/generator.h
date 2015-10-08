@@ -27,6 +27,6 @@
 
 #include "board.h"
 
-Board generate(int w, int h);
+Board generate(int w, int h, unsigned int seed);
 
 #endif

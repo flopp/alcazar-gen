@@ -40,7 +40,8 @@ bool parseCommandLine(int argc, char** argv, Options& options)
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "Display this help message")
-        ("solve,s", "Solve generated puzzle")
+        ("seed", po::value<unsigned int>(), "Set random seed")
+        ("solve", "Solve generated puzzle")
     ;
 
     po::options_description hidden("Hidden options");
@@ -80,6 +81,11 @@ bool parseCommandLine(int argc, char** argv, Options& options)
         else
         {
             throw std::invalid_argument("missing dimensions");
+        }
+        
+        if (vm.count("seed"))
+        {
+            options.seed = vm["seed"].as<unsigned int>();
         }
         
         options.solve = vm.count("solve") > 0;
