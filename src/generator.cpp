@@ -94,18 +94,15 @@ Board generate(int w, int h, unsigned int seed)
         Minisat::vec<Minisat::Lit> initialAssumptions;
        
         // fix entry and exit
-        std::uniform_int_distribution<std::mt19937::result_type> edgeFieldDist(0, edgeFields.size() - 1);
-        for (;;)
+        int field1 = -1;
+        int field2 = -1;
+        while (field1 == field2)
         {
-            const int entryField = edgeFields[edgeFieldDist(rng)];
-            const int exitField = edgeFields[edgeFieldDist(rng)];
-            if (entryField < exitField)
-            {
-                initialAssumptions.push(field_pathpos2lit[{entryField, 0}]);
-                initialAssumptions.push(field_pathpos2lit[{exitField, pathLength-1}]);
-                break;
-            }
+            field1 = randomChoice(edgeFields, rng);
+            field2 = randomChoice(edgeFields, rng);
         }
+        initialAssumptions.push(field_pathpos2lit[{std::min(field1, field2), 0}]);
+        initialAssumptions.push(field_pathpos2lit[{std::max(field1, field2), pathLength-1}]);
        
         // no walls
         for (auto wall: b.getPossibleWalls())
