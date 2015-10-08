@@ -30,7 +30,7 @@ Board::Board(int w, int h) :
 {}
 
 
-void Board::encode(Minisat::Solver& s, std::map<std::pair<int, int>, Minisat::Lit>& field_pathpos2lit, std::map<Wall, Minisat::Lit>& wall2lit) const
+void Board::encode(SatSolver& s, std::map<std::pair<int, int>, Minisat::Lit>& field_pathpos2lit, std::map<Wall, Minisat::Lit>& wall2lit) const
 {
     const int pathLength = m_width * m_height;
     
@@ -303,7 +303,7 @@ void Board::encode(Minisat::Solver& s, std::map<std::pair<int, int>, Minisat::Li
 
 std::tuple<bool, bool, Path> Board::solve() const
 {
-    Minisat::Solver s;
+    SatSolver s;
     std::map<std::pair<int, int>, Minisat::Lit> field_pathpos2lit;
     std::map<Wall, Minisat::Lit> wall2lit;
     

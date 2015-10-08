@@ -14,6 +14,7 @@ add_executable(alcazar-gen
   src/path.cpp
   src/wall.cpp
   src/minisat/core/Solver.cc
+  src/minisat/simp/SimpSolver.cc
   src/minisat/utils/System.cc
 )
 

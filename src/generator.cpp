@@ -66,16 +66,17 @@ Board generate(int w, int h, unsigned int seed)
     std::cout << "Using seed " << seed << std::endl;
     rng.seed(seed);
     
-    std::cout << "Creating initial path..." << std::flush;
-    
     const int pathLength = w * h;
     Board b(w, h);
     
-    Minisat::Solver s;
+    SatSolver s;
     std::map<std::pair<int, int>, Minisat::Lit> field_pathpos2lit;
     std::map<Wall, Minisat::Lit> wall2lit;
     b.encode(s, field_pathpos2lit, wall2lit);
     
+    std::cout << "SAT encoding has " << s.nVars() << " variables and " << s.nClauses() << " clauses" << std::endl;
+
+    std::cout << "Creating initial path..." << std::flush;
     std::vector<int> edgeFields;
     for (int x = 0; x < w; ++x)
     {

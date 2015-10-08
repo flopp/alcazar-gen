@@ -30,9 +30,11 @@
 #include <set>
 #include <tuple>
 #include <vector>
-#include "minisat/core/Solver.h"
+#include "minisat/simp/SimpSolver.h"
 #include "path.h"
 #include "wall.h"
+
+typedef Minisat::SimpSolver SatSolver;
 
 class Board
 {
@@ -44,7 +46,7 @@ class Board
         int index(int x, int y) const { return x + m_width * y; }
         Coordinates coord(int index) const { return Coordinates(index % m_width, index / m_width); }
         
-        void encode(Minisat::Solver& s, std::map<std::pair<int, int>, Minisat::Lit>& field_pathpos2lit, std::map<Wall, Minisat::Lit>& wall2lit) const;
+        void encode(SatSolver& s, std::map<std::pair<int, int>, Minisat::Lit>& field_pathpos2lit, std::map<Wall, Minisat::Lit>& wall2lit) const;
         std::tuple<bool, bool, Path> solve() const;
         
         void addWall(const Wall& w) { m_walls.insert(w); }
