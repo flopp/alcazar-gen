@@ -22,14 +22,14 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#ifndef BOARD_H
-#define BOARD_H
+#pragma once
 
 #include <iostream>
 #include <map>
 #include <set>
 #include <tuple>
 #include <vector>
+#include "coordinates.h"
 #include "minisat/simp/SimpSolver.h"
 #include "path.h"
 #include "wall.h"
@@ -39,11 +39,13 @@ typedef Minisat::SimpSolver SatSolver;
 class Board
 {
     public:
+        Board() = default;
         Board(int w, int h);
         
         const int& width() const { return m_width; }
         const int& height() const { return m_height; }
         int index(int x, int y) const { return x + m_width * y; }
+        int index(const Coordinates& c) const { return index(c.x(), c.y()); }
         Coordinates coord(int index) const { return Coordinates(index % m_width, index / m_width); }
         
         void encode(SatSolver& s, std::map<std::pair<int, int>, Minisat::Lit>& field_pathpos2lit, std::map<Wall, Minisat::Lit>& wall2lit) const;
@@ -57,14 +59,10 @@ class Board
         void print(std::ostream& os, const Path& path) const;
     
     private:
-        int index(const Coordinates& c) const { return index(c.x(), c.y()); }
-        
-        int m_width;
-        int m_height;
+        int m_width = 0;
+        int m_height = 0;
         
         std::set<Wall> m_walls;
 };
 
 std::ostream& operator<<(std::ostream& os, const Board& board);
-
-#endif

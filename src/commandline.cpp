@@ -42,6 +42,7 @@ bool parseCommandLine(int argc, char** argv, Options& options)
         ("help", "Display this help message")
         ("seed", po::value<unsigned int>(), "Set random seed")
         ("solve", "Solve generated puzzle")
+        ("template", po::value<std::string>(), "Template file")
     ;
 
     po::options_description hidden("Hidden options");
@@ -78,10 +79,6 @@ bool parseCommandLine(int argc, char** argv, Options& options)
             options.width = dim[0];
             options.height = dim[1];
         }
-        else
-        {
-            throw std::invalid_argument("missing dimensions");
-        }
         
         if (vm.count("seed"))
         {
@@ -90,6 +87,20 @@ bool parseCommandLine(int argc, char** argv, Options& options)
         
         options.solve = vm.count("solve") > 0;
         
+        if (vm.count("template"))
+        {
+            options.templateFile = vm["template"].as<std::string>();
+        }
+
+        if ((options.width == 0 || options.height == 0) && options.templateFile.empty())
+        {
+            throw std::invalid_argument("either dimensions (WIDTH and HEIGHT) or a template file (--template) must be specified");
+        }
+        if (options.width != 0 && options.height != 0 && !options.templateFile.empty())
+        {
+            throw std::invalid_argument("you must not specify both dimensions (WIDTH and HEIGHT) and a template file (--template)");
+        }
+
         return true;
     }
     catch (std::exception& e) 

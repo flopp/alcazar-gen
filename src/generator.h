@@ -22,11 +22,9 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#ifndef GENERATOR_H
-#define GENERATOR_H
+#pragma once
 
 #include "board.h"
+class TemplateBoard;
 
-Board generate(int w, int h, unsigned int seed);
-
-#endif
+Board generate(const TemplateBoard& templateBoard, unsigned int seed);

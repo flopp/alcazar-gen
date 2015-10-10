@@ -46,6 +46,23 @@ void Board::encode(SatSolver& s, std::map<std::pair<int, int>, Minisat::Lit>& fi
         wall2lit[wall] = Minisat::mkLit(s.newVar());
     }
     
+    /*
+    // every field must have at least two open walls
+    for (int field = 0; field < pathLength; ++field)
+    {
+        const auto c = coord(field);
+        const auto walln = wall2lit[Wall(c, Orientation::Horizontal)];
+        const auto walle = wall2lit[Wall(c.offset(1, 0), Orientation::Vertical)];
+        const auto walls = wall2lit[Wall(c.offset(0, 1), Orientation::Horizontal)];
+        const auto wallw = wall2lit[Wall(c, Orientation::Vertical)];
+
+        s.addClause(~walln, ~walle, ~walls);
+        s.addClause(~walln, ~walle, ~wallw);
+        s.addClause(~walln, ~walls, ~wallw);
+        s.addClause(~walle, ~walls, ~wallw);
+    }
+    */
+
     // every field must appear on the path
     for (int field = 0; field < pathLength; ++field)
     {
@@ -120,6 +137,16 @@ void Board::encode(SatSolver& s, std::map<std::pair<int, int>, Minisat::Lit>& fi
                 if (y + 1 < m_height) clause.push(field_pathpos2lit[{index(x, y+1), p+1}]);
                 
                 s.addClause(clause);
+
+                Minisat::vec<Minisat::Lit> clause2;
+                clause2.push(~field_pathpos2lit[{field, p+1}]);
+
+                if (x > 0)            clause2.push(field_pathpos2lit[{index(x-1, y), p}]);
+                if (x + 1 < m_width)  clause2.push(field_pathpos2lit[{index(x+1, y), p}]);
+                if (y > 0)            clause2.push(field_pathpos2lit[{index(x, y-1), p}]);
+                if (y + 1 < m_height) clause2.push(field_pathpos2lit[{index(x, y+1), p}]);
+
+                s.addClause(clause2);
             }
         }
     }

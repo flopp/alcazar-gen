@@ -109,3 +109,17 @@ std::vector<Wall> Path::getNonblockingWalls(const std::vector<Wall>& walls) cons
     }
     return result;
 }
+
+
+std::vector<Wall> Path::getBlockingWalls(const std::set<Wall>& walls) const
+{
+    std::vector<Wall> result;
+    for (auto wall: walls)
+    {
+        if (isBlockedBy(wall))
+        {
+            result.push_back(wall);
+        }
+    }
+    return result;
+}

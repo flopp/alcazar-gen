@@ -22,9 +22,9 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#ifndef WALL_H
-#define WALL_H
+#pragma once
 
+#include <iostream>
 #include "coordinates.h"
 
 enum class Orientation
@@ -45,8 +45,7 @@ class Wall
 };
 
 
-inline
-bool operator<(const Wall& left, const Wall& right)
+inline bool operator<(const Wall& left, const Wall& right)
 {
     if (left.m_orientation != right.m_orientation)
     {
@@ -56,4 +55,9 @@ bool operator<(const Wall& left, const Wall& right)
     return left.m_coordinates < right.m_coordinates;
 }
 
-#endif
+inline std::ostream& operator<<(std::ostream& os, const Wall& w)
+{
+    os << w.m_coordinates;
+    os << (w.m_orientation == Orientation::Horizontal ? "H" : "V");
+    return os;
+}

@@ -22,8 +22,9 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#ifndef COMMANDLINE_H
-#define COMMANDLINE_H
+#pragma once
+
+#include <string>
 
 struct Options
 {
@@ -31,8 +32,7 @@ struct Options
     int height = 0;
     bool solve = false;
     unsigned int seed = 0;
+    std::string templateFile;
 };
 
 bool parseCommandLine(int argc, char** argv, Options& options);
-
-#endif

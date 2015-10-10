@@ -24,6 +24,7 @@ add_executable(alcazar-gen
   src/generator.cpp
   src/main.cpp
   src/path.cpp
+  src/templateBoard.cpp
   src/wall.cpp
 )
 

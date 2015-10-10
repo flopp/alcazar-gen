@@ -24,8 +24,9 @@
 
 #include <random>
 #include "generator.h"
+#include "templateBoard.h"
 
-template<typename T> T randomChoice(const std::vector<T>& v, std::mt19937& rng)
+template<typename T> const T& randomChoice(const std::vector<T>& v, std::mt19937& rng)
 {
     assert(!v.empty());
     std::uniform_int_distribution<std::mt19937::result_type> dist(0, v.size() - 1);
@@ -56,41 +57,58 @@ template<typename T> T popRandom(std::vector<T>& v, std::mt19937& rng)
 }
 
 
-Board generate(int w, int h, unsigned int seed)
+Board generate(const TemplateBoard& templateBoard, unsigned int seed)
 {
+    if (templateBoard.width() < 2 || templateBoard.height() < 2)
+    {
+        std::cout << "Error: the template board must be at least 2x2" << std::endl;
+        return Board();
+    }
+
+    const std::vector<Coordinates> edgeFields = templateBoard.getNonBlockedEdgeFields();
+    if (edgeFields.size() < 2)
+    {
+        std::cout << "Error: the board template needs at least 2 open edge fields" << std::endl;
+        return Board();
+    }
+
     std::mt19937 rng;
     if (seed == 0)
     {
         seed = std::random_device()();
     }
-    std::cout << "Using seed " << seed << std::endl;
+    std::cout << "Info: using seed " << seed << std::endl;
     rng.seed(seed);
     
+    const int w = templateBoard.width();
+    const int h = templateBoard.height();
     const int pathLength = w * h;
+
     Board b(w, h);
+    for (auto wall: templateBoard.getFixedClosedWalls())
+    {
+        b.addWall(wall);
+    }
     
     SatSolver s;
     std::map<std::pair<int, int>, Minisat::Lit> field_pathpos2lit;
     std::map<Wall, Minisat::Lit> wall2lit;
     b.encode(s, field_pathpos2lit, wall2lit);
     
-    std::cout << "SAT encoding has " << s.nVars() << " variables and " << s.nClauses() << " clauses" << std::endl;
+    std::cout << "Info: SAT encoding has " << s.nVars() << " variables and " << s.nClauses() << " clauses" << std::endl;
 
-    std::cout << "Creating initial path..." << std::flush;
-    std::vector<int> edgeFields;
-    for (int x = 0; x < w; ++x)
+    std::cout << "Info: creating initial path" << std::flush;
+    for (auto wall: templateBoard.getFixedClosedWalls())
     {
-        edgeFields.push_back(b.index(x, 0));
-        edgeFields.push_back(b.index(x, h-1));
+        s.addClause(wall2lit[wall]);
     }
-    for (int y = 1; y+1 < h; ++y)
+    for (auto wall: templateBoard.getFixedOpenWalls())
     {
-        edgeFields.push_back(b.index(0, y));
-        edgeFields.push_back(b.index(w-1, y));
+        s.addClause(~wall2lit[wall]);
     }
-        
+
     // find initial path in empty board with random fixed entry/exit
-    for (;;)
+    for (int count = 0; /**/; ++count)
     {
         Minisat::vec<Minisat::Lit> initialAssumptions;
        
@@ -99,23 +117,30 @@ Board generate(int w, int h, unsigned int seed)
         int field2 = -1;
         while (field1 == field2)
         {
-            field1 = randomChoice(edgeFields, rng);
-            field2 = randomChoice(edgeFields, rng);
+            const Coordinates& c1 = randomChoice(edgeFields, rng);
+            const Coordinates& c2 = randomChoice(edgeFields, rng);
+            field1 = b.index(c1);
+            field2 = b.index(c2);
         }
         initialAssumptions.push(field_pathpos2lit[{std::min(field1, field2), 0}]);
         initialAssumptions.push(field_pathpos2lit[{std::max(field1, field2), pathLength-1}]);
-       
-        // no walls
-        for (auto wall: b.getPossibleWalls())
+
+        for (auto wall: templateBoard.getPossibleWalls())
         {
             initialAssumptions.push(~wall2lit[wall]);
         }
 
         if (s.solve(initialAssumptions)) break;
+
+        if (count > 100)
+        {
+            std::cout << "\nError: cannot find initial path within 100 tries. Check template!" << std::endl;
+            return Board();
+        }
     }
     
-    // extract initial path
-    Path path(pathLength);
+    // extract initialPath
+    Path initialPath(pathLength);
     Minisat::vec<Minisat::Lit> pathClause;
     for (int field = 0; field < pathLength; ++field)
     {
@@ -126,63 +151,78 @@ Board generate(int w, int h, unsigned int seed)
                 
             if (value == Minisat::l_True)
             {
-                path.set(pos, b.coord(field));
+                initialPath.set(pos, b.coord(field));
                 pathClause.push(~lit);
             }
         }
     }
-    // initial path is forbidden
+    std::cout << "\rInfo: initial path created                     " << std::endl;
+
+    // initialPath is forbidden
     s.addClause(pathClause);
-    std::cout << " done" << std::endl;
-    
+
+    b.print(std::cout, initialPath);
         
-    std::vector<Wall> nonblockingWalls = path.getNonblockingWalls(b.getPossibleWalls());
-        
-    // fixed variables of open walls
-    std::set<Wall> openWalls;
-    for (auto w: b.getOpenWalls())
+    std::set<Wall> fixedClosedWalls = templateBoard.getFixedClosedWalls();
+    std::set<Wall> fixedOpenWalls = templateBoard.getFixedOpenWalls();
+
+    std::vector<Wall> possibleWalls;
     {
-        openWalls.insert(w);
-    }
-    for (auto w: nonblockingWalls)
-    {
-        openWalls.erase(w);
-    }
-    for (auto w: openWalls)
-    {
-        s.addClause(~wall2lit[w]);
+        std::vector<Wall> nonblockingWalls;
+        for (auto w: templateBoard.getPossibleWalls())
+        {
+            nonblockingWalls.push_back(w);
+        }
+        nonblockingWalls = initialPath.getNonblockingWalls(nonblockingWalls);
+
+        for (auto w: nonblockingWalls)
+        {
+            if (fixedClosedWalls.find(w) == fixedClosedWalls.end())
+            {
+                possibleWalls.push_back(w);
+            }
+        }
+
+        for (auto w: initialPath.getBlockingWalls(templateBoard.getAllWalls()))
+        {
+            if (fixedOpenWalls.find(w) == fixedOpenWalls.end())
+            {
+                fixedOpenWalls.insert(w);
+                s.addClause(~wall2lit[w]);
+            }
+        }
     }
     
     // iteratively add non-blocking walls until the initial path is unique (after adding *all* non-blocking walls, the initial path is guaranteed to be unique)
-    std::cout << "Adding walls... " << std::flush;
-    std::vector<Wall> candidateWalls;
-    for (;;)
+    std::cout << "\rInfo: adding walls...                     " << std::flush;
+    std::vector<Wall> candidateClosedWalls;
+    while (!possibleWalls.empty())
     {
         Minisat::vec<Minisat::Lit> assumptions;
 
-        const Wall wall = popRandom(nonblockingWalls, rng);        
+        const Wall wall = popRandom(possibleWalls, rng);
         const auto lit = wall2lit[wall];
         assumptions.push(lit);
-        for (auto w: candidateWalls)
+        for (auto w: candidateClosedWalls)
         {
             assumptions.push(wall2lit[w]);
         }
-        for (auto w: nonblockingWalls)
+        for (auto w: possibleWalls)
         {
             assumptions.push(~wall2lit[w]);
         }
         
-        candidateWalls.push_back(wall);
-        std::cout << "\rAdding walls... " << candidateWalls.size() << ", remaining " << nonblockingWalls.size() << "        " << std::flush;
+        candidateClosedWalls.push_back(wall);
+        std::cout << "\rInfo: adding wall #" << candidateClosedWalls.size() << ", remaining " << possibleWalls.size() << "                     " << std::flush;
         if (!s.solve(assumptions))
         {
             // initial path became unique
             
             // refine candidateWalls by last conflict clause
             std::set<Wall> oldCandidates;
-            for (auto w: candidateWalls) oldCandidates.insert(w);
+            for (auto w: candidateClosedWalls) oldCandidates.insert(w);
             
-            candidateWalls.clear();
+            candidateClosedWalls.clear();
             for (int i = 0; i != s.conflict.toVec().size(); ++i)
             {
                 auto clit = s.conflict.toVec()[i];
@@ -192,7 +232,7 @@ Board generate(int w, int h, unsigned int seed)
                     {
                         if (wall2lit[*w] == ~clit)
                         {
-                            candidateWalls.push_back(*w);
+                            candidateClosedWalls.push_back(*w);
                             w = oldCandidates.erase(w);
                             break;
                         }
@@ -206,28 +246,24 @@ Board generate(int w, int h, unsigned int seed)
             
             for (auto w: oldCandidates)
             {
-                nonblockingWalls.push_back(w);
+                fixedOpenWalls.insert(w);
+                s.addClause(~wall2lit[w]);
             }
             break;
         }
     }
-    for (auto w: nonblockingWalls)
-    {
-        s.addClause(~wall2lit[w]);
-    }
-    std::cout << "\rAdding walls... done, walls=" << candidateWalls.size() << "                            " << std::endl;
+    std::cout << "\rInfo: added walls => walls=" << candidateClosedWalls.size() << "                            " << std::endl;
     
-    std::cout << "Removing walls... " << std::flush;
-    std::vector<Wall> essentialWalls;
-    while (!candidateWalls.empty())
+    std::cout << "\rInfo: removing non-essential walls...                     " << std::flush;
+    while (!candidateClosedWalls.empty())
     {
-        std::cout << "\rRemoving walls... " << candidateWalls.size() << "        " << std::flush;
+        std::cout << "\rInfo: removing walls... " << candidateClosedWalls.size() << "                     " << std::flush;
         Minisat::vec<Minisat::Lit> assumptions;
         
-        const Wall wall = popRandom(candidateWalls, rng);        
+        const Wall wall = popRandom(candidateClosedWalls, rng);
         const auto lit = wall2lit[wall];
         assumptions.push(~lit);
-        for (auto w: candidateWalls)
+        for (auto w: candidateClosedWalls)
         {
             assumptions.push(wall2lit[w]);
         }
@@ -236,7 +272,7 @@ Board generate(int w, int h, unsigned int seed)
         {
             // wall is needed to keep path unique -> fix variable=1
             s.addClause(lit);
-            essentialWalls.push_back(wall);
+            fixedClosedWalls.insert(wall);
         }
         else
         {
@@ -247,7 +283,7 @@ Board generate(int w, int h, unsigned int seed)
                 auto clit = s.conflict.toVec()[i];
                 if (Minisat::sign(clit))
                 {
-                    for (auto w : candidateWalls)
+                    for (auto w : candidateClosedWalls)
                     {
                         if (wall2lit[w] == ~clit)
                         {
@@ -257,16 +293,16 @@ Board generate(int w, int h, unsigned int seed)
                     }
                 }
             }
-            candidateWalls = newCandidateWalls;
+            candidateClosedWalls = newCandidateWalls;
 
             // wall can be removed -> fix variable=0
+            fixedOpenWalls.insert(wall);
             s.addClause(~lit);
         }
     }
-    std::cout << "\rRemoving walls... done, walls=" << essentialWalls.size() << "        " << std::endl;
-    
+    std::cout << "\rInfo: removed non-essential walls => walls=" << fixedClosedWalls.size() << "                     " << std::endl;
     // add non-blocking walls
-    for (auto wall: essentialWalls)
+    for (auto wall: fixedClosedWalls)
     {
         b.addWall(wall);
     }   

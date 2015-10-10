@@ -22,9 +22,9 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#ifndef PATH_H
-#define PATH_H
+#pragma once
 
+#include <set>
 #include <vector>
 #include "coordinates.h"
 #include "wall.h"
@@ -32,8 +32,8 @@
 class Path
 {
     public:
-        Path() {}
-        Path(int length) : m_coordinates(length, Coordinates(-1, -1)) {}
+        Path() = default;
+        explicit Path(int length) : m_coordinates(length, Coordinates(-1, -1)) {}
         
         unsigned int size() const { return m_coordinates.size(); }
         bool isEmpty() const { return size() == 0; }
@@ -43,9 +43,8 @@ class Path
         
         bool isBlockedBy(const Wall& wall) const;
         std::vector<Wall> getNonblockingWalls(const std::vector<Wall>& walls) const;
+        std::vector<Wall> getBlockingWalls(const std::set<Wall>& walls) const;
         
     private:
         std::vector<Coordinates> m_coordinates;
 };
-
-#endif

@@ -22,13 +22,14 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#ifndef COORDINATES_H
-#define COORDINATES_H
+#pragma once
+
+#include <iostream>
 
 class Coordinates
 {
     public:
-        Coordinates() : m_x(0), m_y(0) {}
+        Coordinates() = default;
         Coordinates(int x, int y) : m_x(x), m_y(y) {}
         
         const int& x() const { return m_x; }
@@ -37,19 +38,17 @@ class Coordinates
         Coordinates offset(int dx, int dy) const { return Coordinates(x() + dx, y() + dy); }
     
     private:
-        int m_x;
-        int m_y;
+        int m_x = 0;
+        int m_y = 0;
 };
 
-inline
-bool operator==(const Coordinates& left, const Coordinates& right)
+inline bool operator==(const Coordinates& left, const Coordinates& right)
 {
     return left.x() == right.x() && left.y() == right.y();
 }
 
 
-inline
-bool operator<(const Coordinates& left, const Coordinates& right)
+inline bool operator<(const Coordinates& left, const Coordinates& right)
 {
     if (left.x() != right.x())
     {
@@ -58,4 +57,9 @@ bool operator<(const Coordinates& left, const Coordinates& right)
     return left.y() < right.y();
 }
 
-#endif
+
+inline std::ostream& operator<<(std::ostream& os, const Coordinates& c)
+{
+    os << c.x() << ", " << c.y();
+    return os;
+}

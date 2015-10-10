@@ -22,10 +22,12 @@
 * SOFTWARE.
 *******************************************************************************/
 
+#include <fstream>
 #include <iostream>
 #include "board.h"
 #include "commandline.h"
 #include "generator.h"
+#include "templateBoard.h"
 
 
 int main(int argc, char** argv)
@@ -36,7 +38,29 @@ int main(int argc, char** argv)
         return 1;
     }
     
-    const Board b = generate(options.width, options.height, options.seed);
+    TemplateBoard templateBoard;
+    if (!options.templateFile.empty())
+    {
+        std::ifstream file(options.templateFile);
+        if (!file)
+        {
+            std::cout << "Error: cannot open template file '" << options.templateFile << "' for reading" << std::endl;
+            return 1;
+        }
+        if (!templateBoard.parse(file))
+        {
+            std::cout << "Error: syntax error in template file '" << options.templateFile << "'" << std::endl;
+            return 1;
+        }
+    }
+    else
+    {
+        templateBoard = TemplateBoard(options.width, options.height);
+    }
+
+    std::cout << templateBoard << std::endl;
+
+    const Board b = generate(templateBoard, options.seed);
     std::cout << b << std::endl;
     
     if (options.solve)
