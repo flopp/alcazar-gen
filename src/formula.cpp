@@ -27,7 +27,21 @@
 #include "minisat/core/Solver.h"
 #include "minisat/simp/SimpSolver.h"
 #include "wall.h"
+#include <set>
 #include <vector>
+
+
+int c2f(const Coordinates& c, int width)
+{
+    return c.x() + c.y() * width;
+}
+
+
+Coordinates f2c(int f, int width)
+{
+    return {f%width, f/width};
+}
+
 
 std::vector<Wall> allWalls(int width, int height)
 {
@@ -52,13 +66,28 @@ std::vector<Wall> allWalls(int width, int height)
 }
 
 
-int index(const Coordinates& c, int width)
+std::vector<int> getEdgeFields(int width, int height)
 {
-    return c.x() + c.y() * width;
+    std::vector<int> edgeFields;
+    for (int x = 0; x < width; ++x)
+    {
+        edgeFields.push_back(c2f({x, 0}, width));
+        edgeFields.push_back(c2f({x, height-1}, width));
+    }
+    for (int y = 1; y < height-1; ++y)
+    {
+        edgeFields.push_back(c2f({0, y}, width));
+        edgeFields.push_back(c2f({width-1, y}, width));
+    }
+    return edgeFields;
 }
 
 
-void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, int>, Minisat::Lit>& field_pathpos2lit, std::map<Wall, Minisat::Lit>& wall2lit)
+
+typedef Minisat::vec<Minisat::Lit> Clause;
+
+
+void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, int>, Minisat::Lit>& fp2lit, std::map<Wall, Minisat::Lit>& w2lit)
 {
     const int pathLength = width * height;
 
@@ -66,24 +95,24 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     {
         for (int pathpos = 0; pathpos < pathLength; ++pathpos)
         {
-            field_pathpos2lit[{field, pathpos}] = Minisat::mkLit(s.newVar());
+            fp2lit[{field, pathpos}] = Minisat::mkLit(s.newVar());
         }
     }
 
     for (auto wall: allWalls(width, height))
     {
-        wall2lit[wall] = Minisat::mkLit(s.newVar());
+        w2lit[wall] = Minisat::mkLit(s.newVar());
     }
 
     /*
     // every field must have at least two open walls
     for (int field = 0; field < pathLength; ++field)
     {
-        const auto c = coord(field);
-        const auto walln = wall2lit[Wall(c, Orientation::Horizontal)];
-        const auto walle = wall2lit[Wall(c.offset(1, 0), Orientation::Vertical)];
-        const auto walls = wall2lit[Wall(c.offset(0, 1), Orientation::Horizontal)];
-        const auto wallw = wall2lit[Wall(c, Orientation::Vertical)];
+        const auto c = f2c(field, width);
+        const auto walln = w2lit[Wall(c, Orientation::H)];
+        const auto walle = w2lit[Wall(c.offset(1, 0), Orientation::V)];
+        const auto walls = w2lit[Wall(c.offset(0, 1), Orientation::H)];
+        const auto wallw = w2lit[Wall(c, Orientation::V)];
 
         s.addClause(~walln, ~walle, ~walls);
         s.addClause(~walln, ~walle, ~wallw);
@@ -96,188 +125,184 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     // corners must have at least one wall
     // top left
     {
-        const auto wall1 = wall2lit[Wall({0, 0}, Orientation::Horizontal)];
-        const auto wall2 = wall2lit[Wall({0, 0}, Orientation::Vertical)];
+        const auto wall1 = w2lit[Wall({0, 0}, Orientation::Horizontal)];
+        const auto wall2 = w2lit[Wall({0, 0}, Orientation::Vertical)];
         s.addClause(wall1, wall2);
     }
     // top right
     {
-        const auto wall1 = wall2lit[Wall({width-1, 0}, Orientation::Horizontal)];
-        const auto wall2 = wall2lit[Wall({width, 0}, Orientation::Vertical)];
+        const auto wall1 = w2lit[Wall({width-1, 0}, Orientation::Horizontal)];
+        const auto wall2 = w2lit[Wall({width, 0}, Orientation::Vertical)];
         s.addClause(wall1, wall2);
     }
     // bottom left
     {
-        const auto wall1 = wall2lit[Wall({0, height}, Orientation::Horizontal)];
-        const auto wall2 = wall2lit[Wall({0, height-1}, Orientation::Vertical)];
+        const auto wall1 = w2lit[Wall({0, height}, Orientation::Horizontal)];
+        const auto wall2 = w2lit[Wall({0, height-1}, Orientation::Vertical)];
         s.addClause(wall1, wall2);
     }
     // bottom right
     {
-        const auto wall1 = wall2lit[Wall({width-1, height}, Orientation::Horizontal)];
-        const auto wall2 = wall2lit[Wall({width, height-1}, Orientation::Vertical)];
+        const auto wall1 = w2lit[Wall({width-1, height}, Orientation::Horizontal)];
+        const auto wall2 = w2lit[Wall({width, height-1}, Orientation::Vertical)];
         s.addClause(wall1, wall2);
     }
     */
 
-
     // every field must appear on the path
+    // (f@0 + f@1 + ... + f@P-1) for all f
     for (int field = 0; field < pathLength; ++field)
     {
-        Minisat::vec<Minisat::Lit> clause;
+        Clause clause;
         for (int pos = 0; pos < pathLength; ++pos)
         {
-            // ith node:
-            // vi0 + ... + vin
-            const auto lit = field_pathpos2lit[{field, pos}];
+            const auto lit = fp2lit[{field, pos}];
             clause.push(lit);
         }
         s.addClause(clause);
     }
 
     // every field must not appear twice on the path
+    // f@i -> ~f@j for all f for all i!=j
     for (int field = 0; field < pathLength; ++field)
     {
         for (int pos1 = 0; pos1 < pathLength; ++pos1)
         {
             for (int pos2 = pos1+1; pos2 < pathLength; ++pos2)
             {
-                const auto lit1 = field_pathpos2lit[{field, pos1}];
-                const auto lit2 = field_pathpos2lit[{field, pos2}];
+                const auto lit1 = fp2lit[{field, pos1}];
+                const auto lit2 = fp2lit[{field, pos2}];
                 s.addClause(~lit1, ~lit2);
             }
         }
     }
 
     // some field must be the path's ith step
+    // (0@p + 1@p + ... + F-1@p) for all p
     for (int pos = 0; pos < pathLength; ++pos)
     {
-        Minisat::vec<Minisat::Lit> clause;
+        Clause clause;
         for (int field = 0; field < pathLength; ++field)
         {
-            const auto lit = field_pathpos2lit[{field, pos}];
+            const auto lit = fp2lit[{field, pos}];
             clause.push(lit);
         }
         s.addClause(clause);
     }
 
     // two fields must not be the path's ith step at the same time
+    // i@p -> ~j@p for all p for all i!=j
     for (int pos = 0; pos < pathLength; ++pos)
     {
         for (int field1 = 0; field1 < pathLength; ++field1)
         {
             for (int field2 = field1+1; field2 < pathLength; ++field2)
             {
-                const auto lit1 = field_pathpos2lit[{field1, pos}];
-                const auto lit2 = field_pathpos2lit[{field2, pos}];
+                const auto lit1 = fp2lit[{field1, pos}];
+                const auto lit2 = fp2lit[{field2, pos}];
                 s.addClause(~lit1, ~lit2);
             }
         }
     }
 
-    // consecutive path positions only between adjacent fields
-    // vip -> (vnorth(i)p+1 + veast(i)p+1 + vsouth(i)p+1 + vwest(i)p+1)
-    // <=>  !vip + vnorth(i)p+1 + veast(i)p+1 + vsouth(i)p+1 + vwest(i)p+1
-
+    // consecutive path positions only between neighbours
+    std::set<Coordinates> allCoordinates;
     for (int x = 0; x < width; ++x)
     {
         for (int y = 0; y < height; ++y)
         {
-            const int field = index({x, y}, width);
-            for (int p = 0; p < pathLength - 1; ++p)
+            allCoordinates.insert({x, y});
+        }
+    }
+    for (auto c: allCoordinates)
+    {
+        std::vector<Coordinates> neighbours;
+        std::set<Coordinates> nonNeighbours = allCoordinates;
+        nonNeighbours.erase(c);
+        if (c.x() > 0)          { neighbours.push_back(c.offset(-1,0)); nonNeighbours.erase(c.offset(-1,0)); }
+        if (c.x() + 1 < width)  { neighbours.push_back(c.offset(+1,0)); nonNeighbours.erase(c.offset(+1,0)); }
+        if (c.y() > 0)          { neighbours.push_back(c.offset(0,-1)); nonNeighbours.erase(c.offset(0,-1)); }
+        if (c.y() + 1 < height) { neighbours.push_back(c.offset(0,+1)); nonNeighbours.erase(c.offset(0,+1)); }
+
+        const int field = c2f(c, width);
+        for (int p = 0; p+1 < pathLength; ++p)
+        {
+            // f@p -> fn@p+1 v fe@p+1 v fs@p+1 v fw@p+1
+            Clause clause;
+            clause.push(~fp2lit[{field, p}]);
+            for (auto n: neighbours) { clause.push(fp2lit[{c2f(n, width), p+1}]); }
+            s.addClause(clause);
+
+            // f@p+1 -> fn@p v fe@p v fs@p v fw@p
+            Clause clause2;
+            clause2.push(~fp2lit[{field, p+1}]);
+            for (auto n: neighbours) { clause2.push(fp2lit[{c2f(n, width), p}]); }
+            s.addClause(clause2);
+
+            // f@p -> ~g@p for all non-neighbours g of f
+            for (auto n: nonNeighbours)
             {
-                Minisat::vec<Minisat::Lit> clause;
-                clause.push(~field_pathpos2lit[{field, p}]);
-
-                if (x > 0)          clause.push(field_pathpos2lit[{index({x-1, y}, width), p+1}]);
-                if (x + 1 < width)  clause.push(field_pathpos2lit[{index({x+1, y}, width), p+1}]);
-                if (y > 0)          clause.push(field_pathpos2lit[{index({x, y-1}, width), p+1}]);
-                if (y + 1 < height) clause.push(field_pathpos2lit[{index({x, y+1}, width), p+1}]);
-
-                s.addClause(clause);
-
-                Minisat::vec<Minisat::Lit> clause2;
-                clause2.push(~field_pathpos2lit[{field, p+1}]);
-
-                if (x > 0)          clause2.push(field_pathpos2lit[{index({x-1, y}, width), p}]);
-                if (x + 1 < width)  clause2.push(field_pathpos2lit[{index({x+1, y}, width), p}]);
-                if (y > 0)          clause2.push(field_pathpos2lit[{index({x, y-1}, width), p}]);
-                if (y + 1 < height) clause2.push(field_pathpos2lit[{index({x, y+1}, width), p}]);
-
-                s.addClause(clause2);
+                s.addClause(~fp2lit[{field, p}], ~fp2lit[{c2f(n, width), p+1}]);
             }
         }
     }
 
     // no consecutive path positions between fields separated by wall
     // wall(f1, f2) -> (!f1@p + !f2@p+1) <=> (!wall(f1, f2) + !f1@p + !f2@p+1)
-    for (int x = 0; x < width; ++x)
+    for (auto c: allCoordinates)
     {
-        for (int y = 0; y < height; ++y)
+        const int field = c2f(c, width);
+        for (int p = 0; p+1 < pathLength; ++p)
         {
-            const int field = index({x, y}, width);
-            for (int p = 0; p < pathLength - 1; ++p)
+            const auto lit1 = fp2lit[{field, p}];
+
+            // left wall
+            if (c.x() > 0)
             {
-                const auto lit1 = field_pathpos2lit[{field, p}];
+                const Wall w(c, Orientation::V);
+                const auto litw = w2lit[w];
+                const auto lit2 = fp2lit[{c2f(c.offset(-1,0), width), p+1}];
+                s.addClause(~litw, ~lit1, ~lit2);
+            }
 
-                // left wall
-                if (x > 0)
-                {
-                    const Wall w({x, y}, Orientation::V);
-                    const auto litw = wall2lit[w];
-                    const auto lit2 = field_pathpos2lit[{index({x-1, y}, width), p+1}];
-                    s.addClause(~litw, ~lit1, ~lit2);
-                }
+            // right wall
+            if (c.x() + 1 < width)
+            {
+                const Wall w(c.offset(+1,0), Orientation::V);
+                const auto litw = w2lit[w];
+                const auto lit2 = fp2lit[{c2f(c.offset(+1,0), width), p+1}];
+                s.addClause(~litw, ~lit1, ~lit2);
+            }
 
-                // right wall
-                if (x + 1 < width)
-                {
-                    const Wall w({x+1, y}, Orientation::V);
-                    const auto litw = wall2lit[w];
-                    const auto lit2 = field_pathpos2lit[{index({x+1, y}, width), p+1}];
-                    s.addClause(~litw, ~lit1, ~lit2);
-                }
+            // top wall
+            if (c.y() > 0)
+            {
+                const Wall w(c, Orientation::H);
+                const auto litw = w2lit[w];
+                const auto lit2 = fp2lit[{c2f(c.offset(0,-1), width), p+1}];
+                s.addClause(~litw, ~lit1, ~lit2);
+            }
 
-                // top wall
-                if (y > 0)
-                {
-                    const Wall w({x, y}, Orientation::H);
-                    const auto litw = wall2lit[w];
-                    const auto lit2 = field_pathpos2lit[{index({x, y-1}, width), p+1}];
-                    s.addClause(~litw, ~lit1, ~lit2);
-                }
-
-                // bottom wall
-                if (y + 1 < height)
-                {
-                    const Wall w({x, y+1}, Orientation::H);
-                    const auto litw = wall2lit[w];
-                    const auto lit2 = field_pathpos2lit[{index({x, y+1}, width), p+1}];
-                    s.addClause(~litw, ~lit1, ~lit2);
-                }
+            // bottom wall
+            if (c.y() + 1 < height)
+            {
+                const Wall w(c.offset(0,+1), Orientation::H);
+                const auto litw = w2lit[w];
+                const auto lit2 = fp2lit[{c2f(c.offset(0,+1), width), p+1}];
+                s.addClause(~litw, ~lit1, ~lit2);
             }
         }
     }
 
     // path must start/end at edge
-    std::vector<int> edgeFields;
-    for (int x = 0; x < width; ++x)
-    {
-        edgeFields.push_back(index({x, 0}, width));
-        edgeFields.push_back(index({x, height-1}, width));
-    }
-    for (int y = 1; y < height-1; ++y)
-    {
-        edgeFields.push_back(index({0, y}, width));
-        edgeFields.push_back(index({width-1, y}, width));
-    }
+    const std::vector<int> edgeFields = getEdgeFields(width, height);
 
-    Minisat::vec<Minisat::Lit> entryClause;
-    Minisat::vec<Minisat::Lit> exitClause;
+    Clause entryClause;
+    Clause exitClause;
     for (auto field: edgeFields)
     {
-        entryClause.push(field_pathpos2lit[{field, 0}]);
-        exitClause.push(field_pathpos2lit[{field, pathLength-1}]);
+        entryClause.push(fp2lit[{field, 0}]);
+        exitClause.push(fp2lit[{field, pathLength-1}]);
     }
     s.addClause(entryClause);
     s.addClause(exitClause);
@@ -289,8 +314,8 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
         {
             if (field2 < field1)
             {
-                const auto lit1 = field_pathpos2lit[{field1, 0}];
-                const auto lit2 = field_pathpos2lit[{field2, pathLength-1}];
+                const auto lit1 = fp2lit[{field1, 0}];
+                const auto lit2 = fp2lit[{field2, pathLength-1}];
                 s.addClause(~lit1, ~lit2);
             }
         }
@@ -302,18 +327,18 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     {
         {
             const Wall w({x, 0}, Orientation::H);
-            const auto litw = wall2lit[w];
-            const auto lit1 = field_pathpos2lit[{index({x, 0}, width), 0}];
-            const auto lit2 = field_pathpos2lit[{index({x, 0}, width), pathLength-1}];
+            const auto litw = w2lit[w];
+            const auto lit1 = fp2lit[{c2f({x, 0}, width), 0}];
+            const auto lit2 = fp2lit[{c2f({x, 0}, width), pathLength-1}];
             s.addClause(~litw, ~lit1);
             s.addClause(~litw, ~lit2);
         }
 
         {
             const Wall w({x, height}, Orientation::H);
-            const auto litw = wall2lit[w];
-            const auto lit1 = field_pathpos2lit[{index({x, height-1}, width), 0}];
-            const auto lit2 = field_pathpos2lit[{index({x, height-1}, width), pathLength-1}];
+            const auto litw = w2lit[w];
+            const auto lit1 = fp2lit[{c2f({x, height-1}, width), 0}];
+            const auto lit2 = fp2lit[{c2f({x, height-1}, width), pathLength-1}];
             s.addClause(~litw, ~lit1);
             s.addClause(~litw, ~lit2);
         }
@@ -323,18 +348,18 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     {
         {
             const Wall w({0, y}, Orientation::V);
-            const auto litw = wall2lit[w];
-            const auto lit1 = field_pathpos2lit[{index({0, y}, width), 0}];
-            const auto lit2 = field_pathpos2lit[{index({0, y}, width), pathLength-1}];
+            const auto litw = w2lit[w];
+            const auto lit1 = fp2lit[{c2f({0, y}, width), 0}];
+            const auto lit2 = fp2lit[{c2f({0, y}, width), pathLength-1}];
             s.addClause(~litw, ~lit1);
             s.addClause(~litw, ~lit2);
         }
 
         {
             const Wall w({width, y}, Orientation::V);
-            const auto litw = wall2lit[w];
-            const auto lit1 = field_pathpos2lit[{index({width-1, y}, width), 0}];
-            const auto lit2 = field_pathpos2lit[{index({width-1, y}, width), pathLength-1}];
+            const auto litw = w2lit[w];
+            const auto lit1 = fp2lit[{c2f({width-1, y}, width), 0}];
+            const auto lit2 = fp2lit[{c2f({width-1, y}, width), pathLength-1}];
             s.addClause(~litw, ~lit1);
             s.addClause(~litw, ~lit2);
         }
@@ -343,10 +368,10 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     {
         const Wall w1({0, 0}, Orientation::V);
         const Wall w2({0, 0}, Orientation::H);
-        const auto litw1 = wall2lit[w1];
-        const auto litw2 = wall2lit[w2];
-        const auto lit1 = field_pathpos2lit[{index({0, 0}, width), 0}];
-        const auto lit2 = field_pathpos2lit[{index({0, 0}, width), pathLength-1}];
+        const auto litw1 = w2lit[w1];
+        const auto litw2 = w2lit[w2];
+        const auto lit1 = fp2lit[{c2f({0, 0}, width), 0}];
+        const auto lit2 = fp2lit[{c2f({0, 0}, width), pathLength-1}];
         s.addClause(~litw1, ~litw2, ~lit1);
         s.addClause(~litw1, ~litw2, ~lit2);
     }
@@ -354,10 +379,10 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     {
         const Wall w1({width, 0}, Orientation::V);
         const Wall w2({width-1, 0}, Orientation::H);
-        const auto litw1 = wall2lit[w1];
-        const auto litw2 = wall2lit[w2];
-        const auto lit1 = field_pathpos2lit[{index({width-1, 0}, width), 0}];
-        const auto lit2 = field_pathpos2lit[{index({width-1, 0}, width), pathLength-1}];
+        const auto litw1 = w2lit[w1];
+        const auto litw2 = w2lit[w2];
+        const auto lit1 = fp2lit[{c2f({width-1, 0}, width), 0}];
+        const auto lit2 = fp2lit[{c2f({width-1, 0}, width), pathLength-1}];
         s.addClause(~litw1, ~litw2, ~lit1);
         s.addClause(~litw1, ~litw2, ~lit2);
     }
@@ -365,10 +390,10 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     {
         const Wall w1({0, height-1}, Orientation::V);
         const Wall w2({0, height}, Orientation::H);
-        const auto litw1 = wall2lit[w1];
-        const auto litw2 = wall2lit[w2];
-        const auto lit1 = field_pathpos2lit[{index({0, height-1}, width), 0}];
-        const auto lit2 = field_pathpos2lit[{index({0, height-1}, width), pathLength-1}];
+        const auto litw1 = w2lit[w1];
+        const auto litw2 = w2lit[w2];
+        const auto lit1 = fp2lit[{c2f({0, height-1}, width), 0}];
+        const auto lit2 = fp2lit[{c2f({0, height-1}, width), pathLength-1}];
         s.addClause(~litw1, ~litw2, ~lit1);
         s.addClause(~litw1, ~litw2, ~lit2);
     }
@@ -376,10 +401,10 @@ void buildFormula(int width, int height, SatSolver& s, std::map<std::pair<int, i
     {
         const Wall w1({width, height-1}, Orientation::V);
         const Wall w2({width-1, height}, Orientation::H);
-        const auto litw1 = wall2lit[w1];
-        const auto litw2 = wall2lit[w2];
-        const auto lit1 = field_pathpos2lit[{index({width-1, height-1}, width), 0}];
-        const auto lit2 = field_pathpos2lit[{index({width-1, height-1}, width), pathLength-1}];
+        const auto litw1 = w2lit[w1];
+        const auto litw2 = w2lit[w2];
+        const auto lit1 = fp2lit[{c2f({width-1, height-1}, width), 0}];
+        const auto lit2 = fp2lit[{c2f({width-1, height-1}, width), pathLength-1}];
         s.addClause(~litw1, ~litw2, ~lit1);
         s.addClause(~litw1, ~litw2, ~lit2);
     }

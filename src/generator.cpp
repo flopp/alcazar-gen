@@ -84,14 +84,11 @@ Board Generator::get()
         int field2 = -1;
         while (field1 == field2)
         {
-            const Coordinates& c1 = choice(edgeFields);
-            const Coordinates& c2 = choice(edgeFields);
-            field1 = c2f(c1);
-            field2 = c2f(c2);
+            field1 = c2f(choice(edgeFields));
+            field2 = c2f(choice(edgeFields));
         }
         initialAssumptions.push(fp2lit(std::min(field1, field2), 0));
         initialAssumptions.push(fp2lit(std::max(field1, field2), pathLength-1));
-
 
         for (auto wall: m_template.getPossibleWalls())
         {
@@ -128,8 +125,6 @@ Board Generator::get()
 
     // initialPath is forbidden
     s.addClause(pathClause);
-
-    //b.print(std::cout, initialPath);
         
     std::set<Wall> fixedClosedWalls = m_template.getFixedClosedWalls();
     std::set<Wall> fixedOpenWalls = m_template.getFixedOpenWalls();
@@ -161,6 +156,32 @@ Board Generator::get()
         }
     }
     
+    // lifting possible walls
+    {
+        Minisat::vec<Minisat::Lit> assumptions;
+        for (auto w: possibleWalls)
+        {
+            assumptions.push(w2lit(w));
+        }
+        if (!s.solve(assumptions))
+        {
+            for (auto it = possibleWalls.begin(); it != possibleWalls.end(); /**/)
+            {
+                const auto lit = w2lit(*it);
+                if (s.conflict.has(~lit))
+                {
+                    ++it;
+                }
+                else
+                {
+                    fixedOpenWalls.insert(*it);
+                    s.addClause(~lit);
+                    it = possibleWalls.erase(it);
+                }
+            }
+        }
+    }
+
     // iteratively add non-blocking walls until the initial path is unique (after adding *all* non-blocking walls, the initial path is guaranteed to be unique)
     std::cout << "\rInfo: adding walls...                     " << std::flush;
     std::vector<Wall> candidateClosedWalls;
@@ -182,41 +203,27 @@ Board Generator::get()
         
         candidateClosedWalls.push_back(wall);
         std::cout << "\rInfo: adding wall #" << candidateClosedWalls.size() << ", remaining " << possibleWalls.size() << "                     " << std::flush;
+
         if (!s.solve(assumptions))
         {
             // initial path became unique
             
-            // refine candidateWalls by last conflict clause
-            std::set<Wall> oldCandidates;
-            for (auto w: candidateClosedWalls) oldCandidates.insert(w);
-            
-            candidateClosedWalls.clear();
-            for (int i = 0; i != s.conflict.toVec().size(); ++i)
+            // conflict clause based lifting
+            for (auto it = candidateClosedWalls.begin(); it != candidateClosedWalls.end(); /**/)
             {
-                auto clit = s.conflict.toVec()[i];
-                if (Minisat::sign(clit))
+                const auto lit = w2lit(*it);
+                if (s.conflict.has(~lit))
                 {
-                    for (auto w = oldCandidates.begin(); w != oldCandidates.end(); /**/)
-                    {
-                        if (w2lit(*w) == ~clit)
-                        {
-                            candidateClosedWalls.push_back(*w);
-                            w = oldCandidates.erase(w);
-                            break;
-                        }
-                        else
-                        {
-                            ++w;
-                        }
-                    }
+                    ++it;
+                }
+                else
+                {
+                    fixedOpenWalls.insert(*it);
+                    s.addClause(~lit);
+                    it = candidateClosedWalls.erase(it);
                 }
             }
             
-            for (auto w: oldCandidates)
-            {
-                fixedOpenWalls.insert(w);
-                s.addClause(~w2lit(w));
-            }
             break;
         }
     }
@@ -244,24 +251,21 @@ Board Generator::get()
         }
         else
         {
-            // determining new candidates from final conflict clause
-            std::vector<Wall> newCandidateWalls;
-            for (int i = 0; i != s.conflict.toVec().size(); ++i)
+            // conflict clause based lifting
+            for (auto it = candidateClosedWalls.begin(); it != candidateClosedWalls.end(); /**/)
             {
-                auto clit = s.conflict.toVec()[i];
-                if (Minisat::sign(clit))
+                const auto lit = w2lit(*it);
+                if (s.conflict.has(~lit))
                 {
-                    for (auto w : candidateClosedWalls)
-                    {
-                        if (w2lit(w) == ~clit)
-                        {
-                            newCandidateWalls.push_back(w);
-                            break;
-                        }
-                    }
+                    ++it;
+                }
+                else
+                {
+                    fixedOpenWalls.insert(*it);
+                    s.addClause(~lit);
+                    it = candidateClosedWalls.erase(it);
                 }
             }
-            candidateClosedWalls = newCandidateWalls;
 
             // wall can be removed -> fix variable=0
             fixedOpenWalls.insert(wall);

@@ -36,21 +36,15 @@ Board::Board(int w, int h) :
 std::tuple<bool, bool, Path> Board::solve() const
 {
     SatSolver s;
-    std::map<std::pair<int, int>, Minisat::Lit> field_pathpos2lit;
-    std::map<Wall, Minisat::Lit> wall2lit;
-    buildFormula(m_width, m_height, s, field_pathpos2lit, wall2lit);
+    std::map<std::pair<int, int>, Minisat::Lit> fp2lit;
+    std::map<Wall, Minisat::Lit> w2lit;
+    buildFormula(m_width, m_height, s, fp2lit, w2lit);
     
     const int pathLength = m_width * m_height;
     
-    std::map<Minisat::Var, std::pair<int, int>> var2field_pathpos;
-    for (auto it : field_pathpos2lit)
-    {
-        var2field_pathpos[Minisat::var(it.second)] = it.first;
-    }
-    
     // assumptions: current walls
     Minisat::vec<Minisat::Lit> wallAssumptions;
-    for (auto wall = wall2lit.begin(); wall != wall2lit.end(); ++wall)
+    for (auto wall = w2lit.begin(); wall != w2lit.end(); ++wall)
     {
         if (hasWall(wall->first))
         {
@@ -72,7 +66,7 @@ std::tuple<bool, bool, Path> Board::solve() const
         {
             for (int pos = 0; pos < pathLength; ++pos)
             {
-                const auto lit = field_pathpos2lit[{field, pos}];
+                const auto lit = fp2lit[{field, pos}];
                 const Minisat::lbool value = s.modelValue(lit);
                 
                 if (value == Minisat::l_True)
@@ -105,45 +99,6 @@ std::tuple<bool, bool, Path> Board::solve() const
 }
 
 
-std::vector<Wall> Board::getOpenWalls() const
-{
-    std::vector<Wall> result;
-    
-    for (auto w: getPossibleWalls())
-    {
-        if (!hasWall(w))
-        {
-            result.push_back(w);
-        }
-    }
-    
-    return result;
-}
-
-
-std::vector<Wall> Board::getPossibleWalls() const
-{
-    std::vector<Wall> walls;
-    
-    for (int y = 0; y < m_height; ++y)
-    {
-        for (int x = 0; x <= m_width; ++x)
-        {
-            walls.push_back(Wall({x, y}, Orientation::V));
-        }
-    }
-    for (int y = 0; y <= m_height; ++y)
-    {
-        for (int x = 0; x < m_width; ++x)
-        {
-            walls.push_back(Wall({x, y}, Orientation::H));
-        }
-    }    
-    
-    return walls;
-}
-
-
 std::string int2string(unsigned int value, unsigned int width)
 {
     std::string s;
@@ -166,6 +121,7 @@ std::string int2string(unsigned int value, unsigned int width)
     }
     return s;
 }
+
 
 void Board::print(std::ostream& os, const Path& path) const
 {

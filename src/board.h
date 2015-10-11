@@ -48,8 +48,6 @@ class Board
         
         void addWall(const Wall& w) { m_walls.insert(w); }
         bool hasWall(const Wall& w) const { return m_walls.find(w) != m_walls.end(); }
-        std::vector<Wall> getOpenWalls() const;
-        std::vector<Wall> getPossibleWalls() const;
         
         void print(std::ostream& os, const Path& path) const;
     

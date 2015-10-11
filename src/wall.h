@@ -57,7 +57,6 @@ inline bool operator<(const Wall& left, const Wall& right)
 
 inline std::ostream& operator<<(std::ostream& os, const Wall& w)
 {
-    os << w.m_coordinates;
-    os << (w.m_orientation == Orientation::H ? "H" : "V");
+    os << w.m_coordinates << " " << (w.m_orientation == Orientation::H ? "H" : "V");
     return os;
 }
