@@ -38,7 +38,7 @@ bool Path::isBlockedBy(const Wall& wall) const
     
     switch (wall.m_orientation)
     {
-        case Orientation::Horizontal:
+        case Orientation::H:
             // top border
             if (wall.m_coordinates.y() == 0)
             {
@@ -61,7 +61,7 @@ bool Path::isBlockedBy(const Wall& wall) const
             }
             break;
             
-        case Orientation::Vertical:
+        case Orientation::V:
             // left border
             if (wall.m_coordinates.x() == 0)
             {

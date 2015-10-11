@@ -22,89 +22,56 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#include <random>
+#include "formula.h"
 #include "generator.h"
-#include "templateBoard.h"
+#include "minisat/core/Solver.h"
+#include "minisat/simp/SimpSolver.h"
 
-template<typename T> const T& randomChoice(const std::vector<T>& v, std::mt19937& rng)
+
+Generator::Generator(const TemplateBoard& templateBoard, unsigned int seed) :
+  m_template(templateBoard)
 {
-    assert(!v.empty());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(0, v.size() - 1);
-    return v[dist(rng)];
-}
-
-template<typename T> T popRandom(std::vector<T>& v, std::mt19937& rng)
-{
-    assert(!v.empty());
-    
-    std::uniform_int_distribution<std::mt19937::result_type> dist(0, v.size() - 1);
-    const int index = dist(rng);
-    const T t = v[index];
-    if (v.size() == 1)
-    {
-        v.clear();
-    }
-    else
-    {
-        if (static_cast<unsigned int>(index + 1) != v.size())
-        {
-            std::swap(v[index], v.back());
-        }
-        v.pop_back();
-    }
-    
-    return t;
-}
-
-
-Board generate(const TemplateBoard& templateBoard, unsigned int seed)
-{
-    if (templateBoard.width() < 2 || templateBoard.height() < 2)
-    {
-        std::cout << "Error: the template board must be at least 2x2" << std::endl;
-        return Board();
-    }
-
-    const std::vector<Coordinates> edgeFields = templateBoard.getNonBlockedEdgeFields();
-    if (edgeFields.size() < 2)
-    {
-        std::cout << "Error: the board template needs at least 2 open edge fields" << std::endl;
-        return Board();
-    }
-
-    std::mt19937 rng;
     if (seed == 0)
     {
         seed = std::random_device()();
     }
     std::cout << "Info: using seed " << seed << std::endl;
-    rng.seed(seed);
-    
-    const int w = templateBoard.width();
-    const int h = templateBoard.height();
-    const int pathLength = w * h;
+    m_rng.seed(seed);
+}
 
-    Board b(w, h);
-    for (auto wall: templateBoard.getFixedClosedWalls())
+
+Board Generator::get()
+{
+    if (w() < 2 || h() < 2)
     {
-        b.addWall(wall);
+        std::cout << "Error: the template board must be at least 2x2" << std::endl;
+        return Board();
+    }
+
+    const std::vector<Coordinates> edgeFields = m_template.getNonBlockedEdgeFields();
+    if (edgeFields.size() < 2)
+    {
+        std::cout << "Error: the board template needs at least 2 open edge fields" << std::endl;
+        return Board();
     }
     
+    const int pathLength = w() * h();
+    
     SatSolver s;
-    std::map<std::pair<int, int>, Minisat::Lit> field_pathpos2lit;
-    std::map<Wall, Minisat::Lit> wall2lit;
-    b.encode(s, field_pathpos2lit, wall2lit);
+    m_fp2lit.clear();
+    m_w2lit.clear();
+    buildFormula(w(), h(), s, m_fp2lit, m_w2lit);
     
     std::cout << "Info: SAT encoding has " << s.nVars() << " variables and " << s.nClauses() << " clauses" << std::endl;
 
     std::cout << "Info: creating initial path" << std::flush;
-    for (auto wall: templateBoard.getFixedClosedWalls())
+    for (auto wall: m_template.getFixedClosedWalls())
     {
-        s.addClause(wall2lit[wall]);
+        s.addClause(w2lit(wall));
     }
-    for (auto wall: templateBoard.getFixedOpenWalls())
+    for (auto wall: m_template.getFixedOpenWalls())
     {
-        s.addClause(~wall2lit[wall]);
+        s.addClause(~w2lit(wall));
     }
 
     // find initial path in empty board with random fixed entry/exit
@@ -117,17 +84,18 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
         int field2 = -1;
         while (field1 == field2)
         {
-            const Coordinates& c1 = randomChoice(edgeFields, rng);
-            const Coordinates& c2 = randomChoice(edgeFields, rng);
-            field1 = b.index(c1);
-            field2 = b.index(c2);
+            const Coordinates& c1 = choice(edgeFields);
+            const Coordinates& c2 = choice(edgeFields);
+            field1 = c2f(c1);
+            field2 = c2f(c2);
         }
-        initialAssumptions.push(field_pathpos2lit[{std::min(field1, field2), 0}]);
-        initialAssumptions.push(field_pathpos2lit[{std::max(field1, field2), pathLength-1}]);
+        initialAssumptions.push(fp2lit(std::min(field1, field2), 0));
+        initialAssumptions.push(fp2lit(std::max(field1, field2), pathLength-1));
 
-        for (auto wall: templateBoard.getPossibleWalls())
+
+        for (auto wall: m_template.getPossibleWalls())
         {
-            initialAssumptions.push(~wall2lit[wall]);
+            initialAssumptions.push(~w2lit(wall));
         }
 
         if (s.solve(initialAssumptions)) break;
@@ -146,12 +114,12 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
     {
         for (int pos = 0; pos < pathLength; ++pos)
         {
-            const auto lit = field_pathpos2lit[{field, pos}];
+            const auto lit = fp2lit(field, pos);
             const Minisat::lbool value = s.modelValue(lit);
                 
             if (value == Minisat::l_True)
             {
-                initialPath.set(pos, b.coord(field));
+                initialPath.set(pos, f2c(field));
                 pathClause.push(~lit);
             }
         }
@@ -161,15 +129,15 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
     // initialPath is forbidden
     s.addClause(pathClause);
 
-    b.print(std::cout, initialPath);
+    //b.print(std::cout, initialPath);
         
-    std::set<Wall> fixedClosedWalls = templateBoard.getFixedClosedWalls();
-    std::set<Wall> fixedOpenWalls = templateBoard.getFixedOpenWalls();
+    std::set<Wall> fixedClosedWalls = m_template.getFixedClosedWalls();
+    std::set<Wall> fixedOpenWalls = m_template.getFixedOpenWalls();
 
     std::vector<Wall> possibleWalls;
     {
         std::vector<Wall> nonblockingWalls;
-        for (auto w: templateBoard.getPossibleWalls())
+        for (auto w: m_template.getPossibleWalls())
         {
             nonblockingWalls.push_back(w);
         }
@@ -183,12 +151,12 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
             }
         }
 
-        for (auto w: initialPath.getBlockingWalls(templateBoard.getAllWalls()))
+        for (auto w: initialPath.getBlockingWalls(m_template.getAllWalls()))
         {
             if (fixedOpenWalls.find(w) == fixedOpenWalls.end())
             {
                 fixedOpenWalls.insert(w);
-                s.addClause(~wall2lit[w]);
+                s.addClause(~w2lit(w));
             }
         }
     }
@@ -200,16 +168,16 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
     {
         Minisat::vec<Minisat::Lit> assumptions;
 
-        const Wall wall = popRandom(possibleWalls, rng);
-        const auto lit = wall2lit[wall];
+        const Wall wall = takeChoice(possibleWalls);
+        const auto lit = w2lit(wall);
         assumptions.push(lit);
         for (auto w: candidateClosedWalls)
         {
-            assumptions.push(wall2lit[w]);
+            assumptions.push(w2lit(w));
         }
         for (auto w: possibleWalls)
         {
-            assumptions.push(~wall2lit[w]);
+            assumptions.push(~w2lit(w));
         }
         
         candidateClosedWalls.push_back(wall);
@@ -230,7 +198,7 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
                 {
                     for (auto w = oldCandidates.begin(); w != oldCandidates.end(); /**/)
                     {
-                        if (wall2lit[*w] == ~clit)
+                        if (w2lit(*w) == ~clit)
                         {
                             candidateClosedWalls.push_back(*w);
                             w = oldCandidates.erase(w);
@@ -247,7 +215,7 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
             for (auto w: oldCandidates)
             {
                 fixedOpenWalls.insert(w);
-                s.addClause(~wall2lit[w]);
+                s.addClause(~w2lit(w));
             }
             break;
         }
@@ -260,12 +228,12 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
         std::cout << "\rInfo: removing walls... " << candidateClosedWalls.size() << "                     " << std::flush;
         Minisat::vec<Minisat::Lit> assumptions;
         
-        const Wall wall = popRandom(candidateClosedWalls, rng);
-        const auto lit = wall2lit[wall];
+        const Wall wall = takeChoice(candidateClosedWalls);
+        const auto lit = w2lit(wall);
         assumptions.push(~lit);
         for (auto w: candidateClosedWalls)
         {
-            assumptions.push(wall2lit[w]);
+            assumptions.push(w2lit(w));
         }
         
         if (s.solve(assumptions))
@@ -285,7 +253,7 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
                 {
                     for (auto w : candidateClosedWalls)
                     {
-                        if (wall2lit[w] == ~clit)
+                        if (w2lit(w) == ~clit)
                         {
                             newCandidateWalls.push_back(w);
                             break;
@@ -301,7 +269,9 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
         }
     }
     std::cout << "\rInfo: removed non-essential walls => walls=" << fixedClosedWalls.size() << "                     " << std::endl;
-    // add non-blocking walls
+
+    // create final board
+    Board b(w(), h());
     for (auto wall: fixedClosedWalls)
     {
         b.addWall(wall);
@@ -309,24 +279,29 @@ Board generate(const TemplateBoard& templateBoard, unsigned int seed)
     
     // cosmetic fix: make sure the corners have at least one wall
     // top left
-    if (!b.hasWall(Wall({0,0}, Orientation::Vertical)) && !b.hasWall(Wall({0,0}, Orientation::Horizontal)))
+    if (!b.hasWall(Wall({0,0}, Orientation::V)) && !b.hasWall(Wall({0,0}, Orientation::H)))
     {
-        b.addWall(randomChoice<Wall>({Wall({0,0}, Orientation::Vertical), Wall({0,0}, Orientation::Horizontal)}, rng));
+        std::vector<Wall> walls{Wall({0,0}, Orientation::V), Wall({0,0}, Orientation::H)};
+        b.addWall(takeChoice(walls));
     }
     // top right
-    if (!b.hasWall(Wall({w,0}, Orientation::Vertical)) && !b.hasWall(Wall({w-1,0}, Orientation::Horizontal)))
+    if (!b.hasWall(Wall({w(),0}, Orientation::V)) && !b.hasWall(Wall({w()-1,0}, Orientation::H)))
     {
-        b.addWall(randomChoice<Wall>({Wall({w,0}, Orientation::Vertical), Wall({w-1,0}, Orientation::Horizontal)}, rng));
+        std::vector<Wall> walls{Wall({w(),0}, Orientation::V), Wall({w()-1,0}, Orientation::H)};
+        b.addWall(takeChoice(walls));
     }
     // bottom left
-    if (!b.hasWall(Wall({0,h-1}, Orientation::Vertical)) && !b.hasWall(Wall({0,h}, Orientation::Horizontal)))
+    if (!b.hasWall(Wall({0,h()-1}, Orientation::V)) && !b.hasWall(Wall({0,h()}, Orientation::H)))
     {
-        b.addWall(randomChoice<Wall>({Wall({0,h-1}, Orientation::Vertical), Wall({0,h}, Orientation::Horizontal)}, rng));
+        std::vector<Wall> walls{Wall({0,h()-1}, Orientation::V), Wall({0,h()}, Orientation::H)};
+        b.addWall(takeChoice(walls));
     }
     // top right
-    if (!b.hasWall(Wall({w,h-1}, Orientation::Vertical)) && !b.hasWall(Wall({w-1,h}, Orientation::Horizontal)))
+    if (!b.hasWall(Wall({w(),h()-1}, Orientation::V)) && !b.hasWall(Wall({w()-1,h()}, Orientation::H)))
     {
-        b.addWall(randomChoice<Wall>({Wall({w,h-1}, Orientation::Vertical), Wall({w-1,h}, Orientation::Horizontal)}, rng));
+        std::vector<Wall> walls{Wall({w(),h()-1}, Orientation::V), Wall({w()-1,h()}, Orientation::H)};
+        b.addWall(takeChoice(walls));
     }
+
     return b;
 }

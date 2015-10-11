@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 
     std::cout << templateBoard << std::endl;
 
-    const Board b = generate(templateBoard, options.seed);
+    const Board b = Generator(templateBoard, options.seed).get();
     std::cout << b << std::endl;
     
     if (options.solve)

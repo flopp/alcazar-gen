@@ -33,7 +33,7 @@ Wall::Wall(const Coordinates& coordinates, Orientation orientation) :
 
 bool Wall::isBetween(const Coordinates& c1, const Coordinates& c2) const
 {
-    if (c1.x() == c2.x() && m_orientation == Orientation::Horizontal)
+    if (c1.x() == c2.x() && m_orientation == Orientation::H)
     {
         if (m_coordinates.x() != c1.x()) return false;
         if (m_coordinates.y() <= std::min(c1.y(), c2.y())) return false;
@@ -42,7 +42,7 @@ bool Wall::isBetween(const Coordinates& c1, const Coordinates& c2) const
         return true;
     }
     
-    if (c1.y() == c2.y() && m_orientation == Orientation::Vertical)
+    if (c1.y() == c2.y() && m_orientation == Orientation::V)
     {
         if (m_coordinates.y() != c1.y()) return false;
         if (m_coordinates.x() <= std::min(c1.x(), c2.x())) return false;

@@ -25,14 +25,14 @@ TemplateBoard::TemplateBoard(int w, int h) :
     {
         for (int x = 0; x <= m_width; ++x)
         {
-            m_possibleWalls.insert(Wall({x, y}, Orientation::Vertical));
+            m_possibleWalls.insert(Wall({x, y}, Orientation::V));
         }
     }
     for (int y = 0; y <= m_height; ++y)
     {
         for (int x = 0; x < m_width; ++x)
         {
-            m_possibleWalls.insert(Wall({x, y}, Orientation::Horizontal));
+            m_possibleWalls.insert(Wall({x, y}, Orientation::H));
         }
     }
 }
@@ -144,7 +144,7 @@ bool TemplateBoard::parse(std::istream& is)
             const unsigned int y = row / 2;
             for (unsigned int x = 0; x < line.size(); ++x)
             {
-                const Wall wall({static_cast<int>(x), static_cast<int>(y)}, Orientation::Horizontal);
+                const Wall wall({static_cast<int>(x), static_cast<int>(y)}, Orientation::H);
                 m_allWalls.insert(wall);
                 switch (line[x])
                 {
@@ -166,7 +166,7 @@ bool TemplateBoard::parse(std::istream& is)
             const unsigned int y = (row - 1) / 2;
             for (unsigned int x = 0; x < line.size(); ++x)
             {
-                const Wall wall({static_cast<int>(x), static_cast<int>(y)}, Orientation::Vertical);
+                const Wall wall({static_cast<int>(x), static_cast<int>(y)}, Orientation::V);
                 m_allWalls.insert(wall);
                 switch (line[x])
                 {
@@ -200,29 +200,29 @@ std::vector<Coordinates> TemplateBoard::getNonBlockedEdgeFields() const
     for (int x = 1; x + 1 < m_width; ++x)
     {
         // top
-        if (!isClosed(Wall({x, 0}, Orientation::Horizontal))) edgeFields.push_back({x, 0});
+        if (!isClosed(Wall({x, 0}, Orientation::H))) edgeFields.push_back({x, 0});
         // bottom
-        if (!isClosed(Wall({x, m_height}, Orientation::Horizontal))) edgeFields.push_back({x, m_height - 1});
+        if (!isClosed(Wall({x, m_height}, Orientation::H))) edgeFields.push_back({x, m_height - 1});
     }
     for (int y = 1; y + 1 < m_height; ++y)
     {
         // left
-        if (!isClosed(Wall({0, y}, Orientation::Vertical))) edgeFields.push_back({0, y});
+        if (!isClosed(Wall({0, y}, Orientation::V))) edgeFields.push_back({0, y});
         // right
-        if (!isClosed(Wall({m_width, y}, Orientation::Vertical))) edgeFields.push_back({m_width - 1, y});
+        if (!isClosed(Wall({m_width, y}, Orientation::V))) edgeFields.push_back({m_width - 1, y});
     }
 
     // top left
-    if (!isClosed(Wall({0, 0}, Orientation::Horizontal)) || !isClosed(Wall({0, 0}, Orientation::Vertical))) edgeFields.push_back({0, 0});
+    if (!isClosed(Wall({0, 0}, Orientation::H)) || !isClosed(Wall({0, 0}, Orientation::V))) edgeFields.push_back({0, 0});
 
     // top right
-    if (!isClosed(Wall({m_width - 1, 0}, Orientation::Horizontal)) || !isClosed(Wall({m_width, 0}, Orientation::Vertical))) edgeFields.push_back({m_width - 1, 0});
+    if (!isClosed(Wall({m_width - 1, 0}, Orientation::H)) || !isClosed(Wall({m_width, 0}, Orientation::V))) edgeFields.push_back({m_width - 1, 0});
 
     // bottom left
-    if (!isClosed(Wall({0, m_height}, Orientation::Horizontal)) || !isClosed(Wall({0, m_height - 1}, Orientation::Vertical))) edgeFields.push_back({0, m_height - 1});
+    if (!isClosed(Wall({0, m_height}, Orientation::H)) || !isClosed(Wall({0, m_height - 1}, Orientation::V))) edgeFields.push_back({0, m_height - 1});
 
     // bottom right
-    if (!isClosed(Wall({m_width - 1, m_height}, Orientation::Horizontal)) || !isClosed(Wall({m_width, m_height - 1}, Orientation::Vertical))) edgeFields.push_back({m_width - 1, m_height - 1});
+    if (!isClosed(Wall({m_width - 1, m_height}, Orientation::H)) || !isClosed(Wall({m_width, m_height - 1}, Orientation::V))) edgeFields.push_back({m_width - 1, m_height - 1});
 
     return edgeFields;
 }
@@ -263,10 +263,10 @@ std::ostream& operator<<(std::ostream& os, const TemplateBoard& b)
 
         switch (wall.m_orientation)
         {
-            case Orientation::Horizontal:
+            case Orientation::H:
                 for (int i = 1; i < dx; ++i) grid[gy][gx+i] = '-';
                 break;
-            case Orientation::Vertical:
+            case Orientation::V:
                 for (int i = 1; i < dy; ++i) grid[gy+i][gx] = '|';
                 break;
         }
@@ -279,10 +279,10 @@ std::ostream& operator<<(std::ostream& os, const TemplateBoard& b)
 
         switch (wall.m_orientation)
         {
-            case Orientation::Horizontal:
+            case Orientation::H:
                 for (int i = 1; i < dx; ++i) grid[gy][gx+i] = ' ';
                 break;
-            case Orientation::Vertical:
+            case Orientation::V:
                 for (int i = 1; i < dy; ++i) grid[gy+i][gx] = ' ';
                 break;
         }
@@ -294,10 +294,10 @@ std::ostream& operator<<(std::ostream& os, const TemplateBoard& b)
 
         switch (wall.m_orientation)
         {
-            case Orientation::Horizontal:
+            case Orientation::H:
                 for (int i = 1; i < dx; ++i) grid[gy][gx+i] = '.';
                 break;
-            case Orientation::Vertical:
+            case Orientation::V:
                 for (int i = 1; i < dy; ++i) grid[gy+i][gx] = ':';
                 break;
         }
