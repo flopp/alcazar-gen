@@ -21,6 +21,7 @@ Warning: generating puzzles with size > 5x5 may take a considerable amount of ti
 You may either specify WIDTH and HEIGHT or a template file via the option "--template".
 
 A template file for a WxH sized puzzle contains (2*H+1) lines with (2*W+1) of the following characters:
+   
     +: an intersection of wall (just for decoration purposes) 
     .: a field (just for decoration purposes)
     | or -: a fixed closed wall position (the generated puzzle will have a wall in this position)
