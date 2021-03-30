@@ -22,10 +22,11 @@
 * SOFTWARE.
 *******************************************************************************/
 
+#include <core/Solver.h>
+#include <simp/SimpSolver.h>
+
 #include "board.h"
 #include "formula.h"
-#include "minisat/core/Solver.h"
-#include "minisat/simp/SimpSolver.h"
 
 Board::Board(int w, int h) :
     m_width(w),
@@ -69,7 +70,7 @@ std::tuple<bool, bool, Path> Board::solve() const
                 const auto lit = fp2lit[{field, pos}];
                 const Minisat::lbool value = s.modelValue(lit);
                 
-                if (value == Minisat::l_True)
+                if (Minisat::toInt(value) == 0 /* = Minisat::l_True */)
                 {
                     path.set(pos, coord(field));
                     pathClause.push(~lit);

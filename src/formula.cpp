@@ -22,13 +22,15 @@
 * SOFTWARE.
 *******************************************************************************/
 
-#include "coordinates.h"
-#include "formula.h"
-#include "minisat/core/Solver.h"
-#include "minisat/simp/SimpSolver.h"
-#include "wall.h"
 #include <set>
 #include <vector>
+
+#include <core/Solver.h>
+#include <simp/SimpSolver.h>
+
+#include "coordinates.h"
+#include "formula.h"
+#include "wall.h"
 
 
 int c2f(const Coordinates& c, int width)

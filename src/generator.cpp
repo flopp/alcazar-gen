@@ -22,10 +22,13 @@
 * SOFTWARE.
 *******************************************************************************/
 
+#include <unordered_set>
+
+#include <core/Solver.h>
+#include <simp/SimpSolver.h>
+
 #include "formula.h"
 #include "generator.h"
-#include "minisat/core/Solver.h"
-#include "minisat/simp/SimpSolver.h"
 
 
 Generator::Generator(const TemplateBoard& templateBoard, unsigned int seed) :
@@ -58,6 +61,7 @@ Board Generator::get()
     const int pathLength = w() * h();
     
     SatSolver s;
+    std::unordered_set<int> conflict;
     m_fp2lit.clear();
     m_w2lit.clear();
     buildFormula(w(), h(), s, m_fp2lit, m_w2lit);
@@ -114,7 +118,7 @@ Board Generator::get()
             const auto lit = fp2lit(field, pos);
             const Minisat::lbool value = s.modelValue(lit);
                 
-            if (value == Minisat::l_True)
+            if (Minisat::toInt(value) == 0 /* = Minisat::l_True */)
             {
                 initialPath.set(pos, f2c(field));
                 pathClause.push(~lit);
@@ -165,10 +169,12 @@ Board Generator::get()
         }
         if (!s.solve(assumptions))
         {
+            getConflictSet(s.conflict, conflict);
+
             for (auto it = possibleWalls.begin(); it != possibleWalls.end(); /**/)
             {
                 const auto lit = w2lit(*it);
-                if (s.conflict.has(~lit))
+                if (conflict.find(Minisat::toInt(~lit)) != conflict.end())
                 {
                     ++it;
                 }
@@ -207,12 +213,14 @@ Board Generator::get()
         if (!s.solve(assumptions))
         {
             // initial path became unique
+
+            getConflictSet(s.conflict, conflict);
             
             // conflict clause based lifting
             for (auto it = candidateClosedWalls.begin(); it != candidateClosedWalls.end(); /**/)
             {
                 const auto lit = w2lit(*it);
-                if (s.conflict.has(~lit))
+                if (conflict.find(Minisat::toInt(~lit)) != conflict.end())
                 {
                     ++it;
                 }
@@ -251,11 +259,13 @@ Board Generator::get()
         }
         else
         {
+            getConflictSet(s.conflict, conflict);
+
             // conflict clause based lifting
             for (auto it = candidateClosedWalls.begin(); it != candidateClosedWalls.end(); /**/)
             {
                 const auto lit = w2lit(*it);
-                if (s.conflict.has(~lit))
+                if (conflict.find(Minisat::toInt(~lit)) != conflict.end())
                 {
                     ++it;
                 }
@@ -308,4 +318,12 @@ Board Generator::get()
     }
 
     return b;
+}
+
+void Generator::getConflictSet(const Minisat::vec<Minisat::Lit>& conflictVec, std::unordered_set<int>& conflictSet) const
+{
+    conflictSet.clear();
+    for (int i = 0; i < conflictVec.size(); ++i) {
+        conflictSet.insert(Minisat::toInt(conflictVec[i]));
+    }
 }

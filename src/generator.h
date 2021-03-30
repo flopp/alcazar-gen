@@ -24,14 +24,17 @@
 
 #pragma once
 
+#include <cassert>
+#include <map>
+#include <random>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include <core/SolverTypes.h>
+
 #include "board.h"
 #include "templateBoard.h"
-#include <cassert>
-#include <random>
-#include <vector>
-#include <map>
-#include <utility>
-#include "minisat/core/SolverTypes.h"
 
 class Generator
 {
@@ -50,6 +53,7 @@ class Generator
       Minisat::Lit fp2lit(int f, int p) const { auto it = m_fp2lit.find({f, p}); return (it != m_fp2lit.end()) ? it->second : Minisat::Lit(); }
       Minisat::Lit w2lit(const Wall& wall) const { auto it = m_w2lit.find(wall); return (it != m_w2lit.end()) ? it->second : Minisat::Lit(); }
 
+      void getConflictSet(const Minisat::vec<Minisat::Lit>& conflictVec, std::unordered_set<int>& conflictSet) const;
       template<typename T> const T& choice(const std::vector<T>& v);
       template<typename T> T takeChoice(std::vector<T>& v);
 
